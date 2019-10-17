@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package priceMonitor;
+
+option go_package = "priceMonitorpb";
+
+message Product {
+    string id = 1;
+    string url = 2;
+    []string images = 3;
+    []PriceTime history = 4;
+    time created_at = 5;
+}
+
+message PriceTime {
+    string price = 1;
+    time time = 2;
+}
+
+
+message AddProductRequest {
+    string url = 1;
+}
+
+message AddProductResponse { 
+    Product product = 1;
+}
+
+message GetProductRequest {
+    string id = 1;
+}
+
+message ProductResponse { 
+    Product product = 1;
+}
+
+message GetProductsRequest { }
+
+message ProductsResponse { 
+    []Product products = 1;
+}
+
+service PriceMonitorService {
+    rpc AddProduct(AddProductRequest) returns (AddProductResponse) {};
+    rpc GetProduct(GetProductRequest) returns (ProductResponse) {};
+    rpc GetProducts(GetProductsRequest) returns (ProductsResponse) {};
+}
