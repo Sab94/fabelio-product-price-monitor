@@ -7,14 +7,14 @@ option go_package = "priceMonitorpb";
 message Product {
     string id = 1;
     string url = 2;
-    []string images = 3;
-    []PriceTime history = 4;
-    time created_at = 5;
+    repeated string images = 3;
+    repeated PriceTime history = 4;
+    string created_at = 5;
 }
 
 message PriceTime {
     string price = 1;
-    time time = 2;
+    string time = 2;
 }
 
 
@@ -37,7 +37,7 @@ message ProductResponse {
 message GetProductsRequest { }
 
 message ProductsResponse { 
-    []Product products = 1;
+    repeated Product products = 1;
 }
 
 service PriceMonitorService {
