@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package crawler;
+
+option go_package = "crawlerpb";
+
+message ProductUrl {
+    string url = 1;
+}
+
+message ProductInfo {
+    string name = 1;
+    string image = 2;
+    string price = 3;
+}
+
+service CrawlerService {
+    rpc Crawl(ProductUrl) returns (ProductInfo) {};
+}

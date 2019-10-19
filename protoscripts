@@ -1,1 +1,2 @@
 protoc services/priceMonitorpb/priceMonitor.proto --go_out=plugins=grpc:.
+protoc services/crawlerpb/crawler.proto --go_out=plugins=grpc:.
