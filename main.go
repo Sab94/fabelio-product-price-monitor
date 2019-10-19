@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"log"
@@ -9,11 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
+	"github.com/joho/godotenv"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/crawlerClient"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/database"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/services/crawlerpb"
@@ -166,7 +165,13 @@ func (*server) Crawl(ctx context.Context, req *crawlerpb.ProductUrl) (*crawlerpb
 }
 
 func main() {
+	err := godotenv.Load()
 
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	} else {
+		fmt.Println("env loaded")
+	}
 	database.Connect()
 
 	priceMonitorServer := grpc.NewServer()
@@ -254,31 +259,20 @@ func parseArray(anArray []interface{}) {
 }
 
 func getProduct(url string) crawlerpb.ProductInfo {
-	res, err := http.Get(url)
+	doc, err := goquery.NewDocument(url)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
-	}
-
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	x := doc.Text()
-	scanner := bufio.NewScanner(strings.NewReader(x))
 	product := crawlerpb.ProductInfo{}
-	for scanner.Scan() {
-		if strings.HasPrefix(strings.TrimSpace(scanner.Text()), "\"price\"") {
-			product.Price = strings.TrimSpace(strings.TrimRight(strings.TrimLeft(strings.TrimSpace(scanner.Text()), "\"price\":"), ","))
-			break
-		} else if strings.HasPrefix(strings.TrimSpace(scanner.Text()), "\"image\"") {
-			product.Image = strings.TrimSpace(strings.TrimRight(strings.TrimLeft(strings.TrimSpace(scanner.Text()), "\"image\":"), ","))
-		} else if strings.HasPrefix(strings.TrimSpace(scanner.Text()), "\"name\"") {
-			product.Name = "\"" + strings.TrimRight(strings.TrimLeft(strings.TrimSpace(scanner.Text()), "\"name\":"), ",")
+	doc.Find("meta").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("property"); name == "og:title" {
+			product.Name, _ = s.Attr("content")
+		} else if name, _ := s.Attr("property"); name == "og:image" {
+			product.Image, _ = s.Attr("content")
+		} else if name, _ := s.Attr("property"); name == "product:price:amount" {
+			product.Price, _ = s.Attr("content")
 		}
-	}
+	})
+
 	return product
 }
