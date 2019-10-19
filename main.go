@@ -19,7 +19,8 @@ import (
 type Product struct {
 	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Url       string             `json:"url" bson:"url"`
-	Images    []string           `json:"images" bson:"images"`
+	Name      string             `json:"name" bson:"name"`
+	Images    string             `json:"images" bson:"images"`
 	History   []PriceTime        `json:"history" bson:"history"`
 	CreatedAt string             `json:"created_at" bson:"created_at"`
 }
@@ -41,7 +42,7 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 	// Step 3: Start a goroutine to ferch updates every hour
 	product := Product{
 		Url:    "asd",
-		Images: []string{"asdasd"},
+		Images: "asdasd",
 		History: []PriceTime{
 			{
 				Price: "132",
@@ -78,7 +79,7 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 	// Step 2: Fetch into website (current price)
 	product := Product{
 		Url:    "asd",
-		Images: []string{"asdasd"},
+		Images: "asdasd",
 		History: []PriceTime{
 			{
 				Price: "132",
@@ -112,7 +113,7 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 	// Step 1: Fetch from db
 	product := Product{
 		Url:    "asd",
-		Images: []string{"asdasd"},
+		Images: "asdasd",
 		History: []PriceTime{
 			{
 				Price: "132",
@@ -179,7 +180,6 @@ func main() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, os.Kill)
 	<-sig
-
 }
 
 func allowCors(w http.ResponseWriter, req *http.Request) {

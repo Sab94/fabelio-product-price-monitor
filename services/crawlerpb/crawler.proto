@@ -12,6 +12,7 @@ message ProductInfo {
     string name = 1;
     string image = 2;
     string price = 3;
+    string url = 4;
 }
 
 service CrawlerService {

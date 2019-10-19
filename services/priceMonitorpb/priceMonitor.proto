@@ -7,7 +7,7 @@ option go_package = "priceMonitorpb";
 message Product {
     string id = 1;
     string url = 2;
-    repeated string images = 3;
+    string images = 3;
     repeated PriceTime history = 4;
     string created_at = 5;
 }
