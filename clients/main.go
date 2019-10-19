@@ -23,7 +23,7 @@ func main() {
 	c := priceMonitorpb.NewPriceMonitorServiceClient(cc)
 
 	req := &priceMonitorpb.AddProductRequest{
-		Url: "asdasdasdasdasd",
+		Url: "https://fabelio.com/ip/tirai-kuro.html",
 	}
 
 	res, err := c.AddProduct(context.Background(), req)

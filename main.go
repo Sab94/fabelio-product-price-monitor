@@ -1,15 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
+	"gitlab.com/Sab94/fabelio-product-price-monitor/crawlerClient"
+	"gitlab.com/Sab94/fabelio-product-price-monitor/database"
+	"gitlab.com/Sab94/fabelio-product-price-monitor/services/crawlerpb"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/services/priceMonitorpb"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
@@ -34,22 +41,28 @@ type server struct{}
 
 func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductRequest) (*priceMonitorpb.AddProductResponse, error) {
 	url := req.GetUrl()
-	fmt.Println(url)
 	// Step 1: Fetch from website
+	productRaw := crawlerClient.Crawl(url)
 
-	// Step 2: Store into db
+	// Step 2: Start a goroutine to ferch updates every hour
 
-	// Step 3: Start a goroutine to ferch updates every hour
+	// Step 3: Store into db
 	product := Product{
-		Url:    "asd",
-		Images: "asdasd",
+		Url:    url,
+		Images: productRaw.GetImage(),
 		History: []PriceTime{
 			{
-				Price: "132",
+				Price: productRaw.GetPrice(),
 				Time:  time.Now().String(),
 			},
 		},
+		Name:      productRaw.GetName(),
 		CreatedAt: time.Now().String(),
+	}
+	collection := database.DB.Collection("products")
+	_, err := collection.InsertOne(ctx, product)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	history := make([]*priceMonitorpb.PriceTime, len(product.History))
@@ -59,7 +72,7 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 	}
 
 	productpb := priceMonitorpb.Product{
-		Id:        "qwe",
+		Id:        "aaa",
 		Url:       product.Url,
 		History:   history,
 		Images:    product.Images,
@@ -142,26 +155,49 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 	return res, nil
 }
 
+func (*server) Crawl(ctx context.Context, req *crawlerpb.ProductUrl) (*crawlerpb.ProductInfo, error) {
+	url := req.GetUrl()
+
+	product := getProduct(url)
+
+	res := &product
+
+	return res, nil
+}
+
 func main() {
-	grpcServer := grpc.NewServer()
-	priceMonitorpb.RegisterPriceMonitorServiceServer(grpcServer, &server{})
+
+	database.Connect()
+
+	priceMonitorServer := grpc.NewServer()
+	crawlerServer := grpc.NewServer()
+	priceMonitorpb.RegisterPriceMonitorServiceServer(priceMonitorServer, &server{})
+	crawlerpb.RegisterCrawlerServiceServer(crawlerServer, &server{})
 
 	// grpc
-	listen, err := net.Listen("tcp", ":50051")
+	listenPriceMonitor, err := net.Listen("tcp", ":50051")
+	listenCrawl, err := net.Listen("tcp", ":50052")
 
 	if err != nil {
-		grpclog.Fatalf("failed starting grpc server: %v", err)
+		grpclog.Fatalf("failed starting grpc servers: %v", err)
 	}
 
 	go func() {
-		fmt.Println("grpc server running on port 50051")
-		if err := grpcServer.Serve(listen); err != nil {
-			grpclog.Fatalf("failed starting grpc server: %v", err)
+		fmt.Println("PriceMonitor server running on port 50051")
+		if err := priceMonitorServer.Serve(listenPriceMonitor); err != nil {
+			grpclog.Fatalf("failed starting PriceMonitor server: %v", err)
+		}
+	}()
+
+	go func() {
+		fmt.Println("Crawl server running on port 50052")
+		if err := crawlerServer.Serve(listenCrawl); err != nil {
+			grpclog.Fatalf("failed starting Crawl server: %v", err)
 		}
 	}()
 
 	// grpc Web
-	wrappedServer := grpcweb.WrapServer(grpcServer)
+	wrappedServer := grpcweb.WrapServer(priceMonitorServer)
 	handler := func(resp http.ResponseWriter, req *http.Request) {
 		allowCors(resp, req)
 		wrappedServer.ServeHTTP(resp, req)
@@ -187,4 +223,62 @@ func allowCors(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	w.Header().Set("Access-Control-Expose-Headers", "grpc-status, grpc-message")
 	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, XMLHttpRequest, x-user-agent, x-grpc-web, grpc-status, grpc-message")
+}
+
+func parseMap(aMap map[string]interface{}) {
+	for key, val := range aMap {
+		switch concreteVal := val.(type) {
+		case map[string]interface{}:
+			parseMap(val.(map[string]interface{}))
+		case []interface{}:
+			parseArray(val.([]interface{}))
+		default:
+			if key == "price" {
+				fmt.Println(key, ":", concreteVal)
+			}
+		}
+	}
+}
+
+func parseArray(anArray []interface{}) {
+	for _, val := range anArray {
+		switch concreteVal := val.(type) {
+		case map[string]interface{}:
+			parseMap(val.(map[string]interface{}))
+		case []interface{}:
+			parseArray(val.([]interface{}))
+		default:
+			_ = concreteVal
+		}
+	}
+}
+
+func getProduct(url string) crawlerpb.ProductInfo {
+	res, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	x := doc.Text()
+	scanner := bufio.NewScanner(strings.NewReader(x))
+	product := crawlerpb.ProductInfo{}
+	for scanner.Scan() {
+		if strings.HasPrefix(strings.TrimSpace(scanner.Text()), "\"price\"") {
+			product.Price = strings.TrimSpace(strings.TrimRight(strings.TrimLeft(strings.TrimSpace(scanner.Text()), "\"price\":"), ","))
+			break
+		} else if strings.HasPrefix(strings.TrimSpace(scanner.Text()), "\"image\"") {
+			product.Image = strings.TrimSpace(strings.TrimRight(strings.TrimLeft(strings.TrimSpace(scanner.Text()), "\"image\":"), ","))
+		} else if strings.HasPrefix(strings.TrimSpace(scanner.Text()), "\"name\"") {
+			product.Name = "\"" + strings.TrimRight(strings.TrimLeft(strings.TrimSpace(scanner.Text()), "\"name\":"), ",")
+		}
+	}
+	return product
 }
