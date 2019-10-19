@@ -13,10 +13,12 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/crawlerClient"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/database"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/services/crawlerpb"
 	"gitlab.com/Sab94/fabelio-product-price-monitor/services/priceMonitorpb"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
@@ -29,6 +31,7 @@ type Product struct {
 	Images    string             `json:"images" bson:"images"`
 	History   []PriceTime        `json:"history" bson:"history"`
 	CreatedAt string             `json:"created_at" bson:"created_at"`
+	CronID    cron.EntryID       `json:"cron_id" bson:"cron_id"`
 }
 
 type PriceTime struct {
@@ -44,7 +47,34 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 	productRaw := crawlerClient.Crawl(url)
 
 	// Step 2: Start a goroutine to ferch updates every hour
+	collection := database.DB.Collection("products")
+	cronEntryID, err := c.AddFunc("@every 2m", func() {
+		product := Product{}
+		err := collection.FindOne(context.Background(), bson.M{"url": url}).Decode(&product)
+		if err != nil {
+			log.Fatal(err)
+		}
 
+		p := getProduct(url)
+		pt := PriceTime{
+			Price: p.GetPrice(),
+			Time:  time.Now().String(),
+		}
+		product.History = append(product.History, pt)
+		_, err = collection.UpdateOne(context.Background(), bson.M{"_id": product.ID}, bson.D{
+			{"$set", bson.D{
+				{"history", product.History},
+			}},
+		})
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Step 3: Store into db
 	product := Product{
 		Url:    url,
@@ -57,9 +87,10 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 		},
 		Name:      productRaw.GetName(),
 		CreatedAt: time.Now().String(),
+		CronID:    cronEntryID,
 	}
-	collection := database.DB.Collection("products")
-	_, err := collection.InsertOne(ctx, product)
+
+	_, err = collection.InsertOne(ctx, product)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -84,23 +115,17 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 }
 
 func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductRequest) (*priceMonitorpb.ProductResponse, error) {
-	url := req.GetId()
-	fmt.Println(url)
+	productID, _ := primitive.ObjectIDFromHex(req.GetId())
+	fmt.Println(productID)
 	// Step 1: Fetch from db
-
-	// Step 2: Fetch into website (current price)
-	product := Product{
-		Url:    "asd",
-		Images: "asdasd",
-		History: []PriceTime{
-			{
-				Price: "132",
-				Time:  time.Now().String(),
-			},
-		},
-		CreatedAt: time.Now().String(),
+	collection := database.DB.Collection("products")
+	product := Product{}
+	err := collection.FindOne(context.Background(), bson.M{"_id": productID}).Decode(&product)
+	if err != nil {
+		log.Fatal(err)
 	}
 
+	// Step 2: Fetch into website (current price)
 	history := make([]*priceMonitorpb.PriceTime, len(product.History))
 
 	for i := range product.History {
@@ -108,7 +133,7 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 	}
 
 	productpb := priceMonitorpb.Product{
-		Id:        "qwe",
+		Id:        product.ID.String(),
 		Url:       product.Url,
 		History:   history,
 		Images:    product.Images,
@@ -123,33 +148,34 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsRequest) (*priceMonitorpb.ProductsResponse, error) {
 
 	// Step 1: Fetch from db
-	product := Product{
-		Url:    "asd",
-		Images: "asdasd",
-		History: []PriceTime{
-			{
-				Price: "132",
-				Time:  time.Now().String(),
-			},
-		},
-		CreatedAt: time.Now().String(),
+	_context := context.Background()
+	collection := database.DB.Collection("products")
+
+	cur, err := collection.Find(_context, bson.D{}, nil)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cur.Close(_context)
+
+	productpbs := []*priceMonitorpb.Product{}
+	for cur.Next(_context) {
+		result := Product{}
+		err := cur.Decode(&result)
+		productpb := &priceMonitorpb.Product{
+			Id:        result.ID.String(),
+			Url:       result.Url,
+			Images:    result.Images,
+			CreatedAt: result.CreatedAt,
+		}
+		productpbs = append(productpbs, productpb)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	history := make([]*priceMonitorpb.PriceTime, len(product.History))
-
-	for i := range product.History {
-		history[i] = &priceMonitorpb.PriceTime{Price: product.History[i].Price, Time: product.History[i].Time}
-	}
-
-	productpb := priceMonitorpb.Product{
-		Id:        "qwe",
-		Url:       product.Url,
-		History:   history,
-		Images:    product.Images,
-		CreatedAt: product.CreatedAt,
-	}
 	res := &priceMonitorpb.ProductsResponse{
-		Products: append([]*priceMonitorpb.Product{}, &productpb),
+		Products: productpbs,
 	}
 	return res, nil
 }
@@ -164,6 +190,8 @@ func (*server) Crawl(ctx context.Context, req *crawlerpb.ProductUrl) (*crawlerpb
 	return res, nil
 }
 
+var c = cron.New()
+
 func main() {
 	err := godotenv.Load()
 
@@ -173,7 +201,7 @@ func main() {
 		fmt.Println("env loaded")
 	}
 	database.Connect()
-
+	c.Start()
 	priceMonitorServer := grpc.NewServer()
 	crawlerServer := grpc.NewServer()
 	priceMonitorpb.RegisterPriceMonitorServiceServer(priceMonitorServer, &server{})
