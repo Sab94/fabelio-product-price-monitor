@@ -16,7 +16,6 @@ export class AllComponent implements OnInit {
   get() {
     this.grpcClient.getProducts().then((res: ProductsResponse) => {
       this.products = res.toObject().productsList
-      console.log(this.products)
     })
   }
 
@@ -25,7 +24,6 @@ export class AllComponent implements OnInit {
   }
 
   gotoProduct(id) {
-    console.log(id)
     this.router.navigateByUrl('/detail/' + id);
   }
 }

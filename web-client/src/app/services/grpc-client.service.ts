@@ -23,11 +23,9 @@ export class GRPCClient {
         const req = new AddProductRequest()
         req.setUrl(url);
         this.client.addProduct(req, null, (err, response) => {
-          console.log('a')
           if (err) {
             reject(err);
           } else {
-            console.log('b', response)
             resolve(response);
           }
         });
@@ -40,11 +38,9 @@ export class GRPCClient {
       function(resolve, reject) {
         const req = new GetProductsRequest();
         this.client.getProducts(req, null, (err, response: ProductsResponse) => {
-          console.log('a')
           if (err) {
             reject(err);
           } else {
-            console.log('b', response)
             resolve(response);
           }
         });
@@ -58,11 +54,9 @@ export class GRPCClient {
         const req = new GetProductRequest();
         req.setId(id)
         this.client.getProduct(req, null, (err, response: ProductResponse) => {
-          console.log('a')
           if (err) {
             reject(err);
           } else {
-            console.log('b', response)
             resolve(response);
           }
         });
