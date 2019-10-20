@@ -133,11 +133,12 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 	}
 
 	productpb := priceMonitorpb.Product{
-		Id:        product.ID.String(),
+		Id:        product.ID.Hex(),
 		Url:       product.Url,
 		History:   history,
 		Images:    product.Images,
 		CreatedAt: product.CreatedAt,
+		Name:      product.Name,
 	}
 	res := &priceMonitorpb.ProductResponse{
 		Product: &productpb,
@@ -163,10 +164,11 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 		result := Product{}
 		err := cur.Decode(&result)
 		productpb := &priceMonitorpb.Product{
-			Id:        result.ID.String(),
+			Id:        result.ID.Hex(),
 			Url:       result.Url,
 			Images:    result.Images,
 			CreatedAt: result.CreatedAt,
+			Name:      result.Name,
 		}
 		productpbs = append(productpbs, productpb)
 		if err != nil {

@@ -1,5 +1,12 @@
-<div>
+<div *ngIf="product">
   <p>{{product.name}}</p>
   <img src="{{product.images}}" alt="">
-
+<!--  <ngx-line-chart [dataSets]="myDataSets"></ngx-line-chart>-->
+  <ngx-charts-line-chart
+    [legend]="true"
+    [results]="myDataSets"
+    [view]="[1100,320]"
+    [xAxis]="true"
+    [xAxisTickFormatting]="this.dateTickFormatting">
+  </ngx-charts-line-chart>
 </div>

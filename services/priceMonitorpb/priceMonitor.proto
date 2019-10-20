@@ -10,6 +10,7 @@ message Product {
     string images = 3;
     repeated PriceTime history = 4;
     string created_at = 5;
+    string name = 6;
 }
 
 message PriceTime {
