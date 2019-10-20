@@ -1,6 +1,8 @@
 <div *ngIf="product">
-  <p>{{product.name}}</p>
+  <p>Product Name : {{product.name}}</p>
   <img src="{{product.images}}" alt="">
+  <p>Latest Price : {{product.price}}</p>
+  <p>{{product.description}}</p>
 <!--  <ngx-line-chart [dataSets]="myDataSets"></ngx-line-chart>-->
   <ngx-charts-line-chart
     [legend]="true"

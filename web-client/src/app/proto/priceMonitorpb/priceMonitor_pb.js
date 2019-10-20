@@ -76,7 +76,9 @@ proto.priceMonitor.Product.toObject = function(includeInstance, msg) {
     historyList: jspb.Message.toObjectList(msg.getHistoryList(),
     proto.priceMonitor.PriceTime.toObject, includeInstance),
     createdAt: msg.getCreatedAt(),
-    name: msg.getName()
+    name: msg.getName(),
+    description: msg.getDescription(),
+    price: msg.getPrice()
   };
 
   if (includeInstance) {
@@ -138,6 +140,14 @@ proto.priceMonitor.Product.deserializeBinaryFromReader = function(msg, reader) {
     case 6:
       var value = /** @type {string} */ (reader.readString());
       msg.setName(value);
+      break;
+    case 7:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setDescription(value);
+      break;
+    case 8:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setPrice(value);
       break;
     default:
       reader.skipField();
@@ -217,6 +227,20 @@ proto.priceMonitor.Product.prototype.serializeBinaryToWriter = function (writer)
   if (f.length > 0) {
     writer.writeString(
       6,
+      f
+    );
+  }
+  f = this.getDescription();
+  if (f.length > 0) {
+    writer.writeString(
+      7,
+      f
+    );
+  }
+  f = this.getPrice();
+  if (f.length > 0) {
+    writer.writeString(
+      8,
       f
     );
   }
@@ -327,6 +351,36 @@ proto.priceMonitor.Product.prototype.getName = function() {
 /** @param {string} value  */
 proto.priceMonitor.Product.prototype.setName = function(value) {
   jspb.Message.setField(this, 6, value);
+};
+
+
+/**
+ * optional string description = 7;
+ * @return {string}
+ */
+proto.priceMonitor.Product.prototype.getDescription = function() {
+  return /** @type {string} */ (jspb.Message.getFieldProto3(this, 7, ""));
+};
+
+
+/** @param {string} value  */
+proto.priceMonitor.Product.prototype.setDescription = function(value) {
+  jspb.Message.setField(this, 7, value);
+};
+
+
+/**
+ * optional string price = 8;
+ * @return {string}
+ */
+proto.priceMonitor.Product.prototype.getPrice = function() {
+  return /** @type {string} */ (jspb.Message.getFieldProto3(this, 8, ""));
+};
+
+
+/** @param {string} value  */
+proto.priceMonitor.Product.prototype.setPrice = function(value) {
+  jspb.Message.setField(this, 8, value);
 };
 
 
