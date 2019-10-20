@@ -21,6 +21,9 @@ export class Product extends jspb.Message {
   getCreatedAt(): string;
   setCreatedAt(value: string): void;
 
+  getName(): string;
+  setName(value: string): void;
+
   serializeBinary(): Uint8Array;
   toObject(includeInstance?: boolean): Product.AsObject;
   static toObject(includeInstance: boolean, msg: Product): Product.AsObject;
@@ -38,6 +41,7 @@ export namespace Product {
     images: string,
     historyList: Array<PriceTime.AsObject>,
     createdAt: string,
+    name: string,
   }
 }
 

@@ -75,7 +75,8 @@ proto.priceMonitor.Product.toObject = function(includeInstance, msg) {
     images: msg.getImages(),
     historyList: jspb.Message.toObjectList(msg.getHistoryList(),
     proto.priceMonitor.PriceTime.toObject, includeInstance),
-    createdAt: msg.getCreatedAt()
+    createdAt: msg.getCreatedAt(),
+    name: msg.getName()
   };
 
   if (includeInstance) {
@@ -133,6 +134,10 @@ proto.priceMonitor.Product.deserializeBinaryFromReader = function(msg, reader) {
     case 5:
       var value = /** @type {string} */ (reader.readString());
       msg.setCreatedAt(value);
+      break;
+    case 6:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setName(value);
       break;
     default:
       reader.skipField();
@@ -205,6 +210,13 @@ proto.priceMonitor.Product.prototype.serializeBinaryToWriter = function (writer)
   if (f.length > 0) {
     writer.writeString(
       5,
+      f
+    );
+  }
+  f = this.getName();
+  if (f.length > 0) {
+    writer.writeString(
+      6,
       f
     );
   }
@@ -300,6 +312,21 @@ proto.priceMonitor.Product.prototype.getCreatedAt = function() {
 /** @param {string} value  */
 proto.priceMonitor.Product.prototype.setCreatedAt = function(value) {
   jspb.Message.setField(this, 5, value);
+};
+
+
+/**
+ * optional string name = 6;
+ * @return {string}
+ */
+proto.priceMonitor.Product.prototype.getName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldProto3(this, 6, ""));
+};
+
+
+/** @param {string} value  */
+proto.priceMonitor.Product.prototype.setName = function(value) {
+  jspb.Message.setField(this, 6, value);
 };
 
 
