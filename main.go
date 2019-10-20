@@ -25,13 +25,15 @@ import (
 )
 
 type Product struct {
-	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Url       string             `json:"url" bson:"url"`
-	Name      string             `json:"name" bson:"name"`
-	Images    string             `json:"images" bson:"images"`
-	History   []PriceTime        `json:"history" bson:"history"`
-	CreatedAt string             `json:"created_at" bson:"created_at"`
-	CronID    cron.EntryID       `json:"cron_id" bson:"cron_id"`
+	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Url         string             `json:"url" bson:"url"`
+	Name        string             `json:"name" bson:"name"`
+	Images      string             `json:"images" bson:"images"`
+	History     []PriceTime        `json:"history" bson:"history"`
+	CreatedAt   string             `json:"created_at" bson:"created_at"`
+	CronID      cron.EntryID       `json:"cron_id" bson:"cron_id"`
+	Description string             `json:"description" bson:"description"`
+	Price       string             `json:"price" bson:"price"`
 }
 
 type PriceTime struct {
@@ -64,6 +66,7 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 		_, err = collection.UpdateOne(context.Background(), bson.M{"_id": product.ID}, bson.D{
 			{"$set", bson.D{
 				{"history", product.History},
+				{"price", pt.Price},
 			}},
 		})
 
@@ -85,9 +88,11 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 				Time:  time.Now().String(),
 			},
 		},
-		Name:      productRaw.GetName(),
-		CreatedAt: time.Now().String(),
-		CronID:    cronEntryID,
+		Name:        productRaw.GetName(),
+		CreatedAt:   time.Now().String(),
+		CronID:      cronEntryID,
+		Description: productRaw.GetDescription(),
+		Price:       productRaw.GetPrice(),
 	}
 
 	_, err = collection.InsertOne(ctx, product)
@@ -102,11 +107,13 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 	}
 
 	productpb := priceMonitorpb.Product{
-		Id:        "aaa",
-		Url:       product.Url,
-		History:   history,
-		Images:    product.Images,
-		CreatedAt: product.CreatedAt,
+		Id:          "aaa",
+		Url:         product.Url,
+		History:     history,
+		Images:      product.Images,
+		CreatedAt:   product.CreatedAt,
+		Description: product.Description,
+		Price:       product.Price,
 	}
 	res := &priceMonitorpb.AddProductResponse{
 		Product: &productpb,
@@ -133,12 +140,14 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 	}
 
 	productpb := priceMonitorpb.Product{
-		Id:        product.ID.Hex(),
-		Url:       product.Url,
-		History:   history,
-		Images:    product.Images,
-		CreatedAt: product.CreatedAt,
-		Name:      product.Name,
+		Id:          product.ID.Hex(),
+		Url:         product.Url,
+		History:     history,
+		Images:      product.Images,
+		CreatedAt:   product.CreatedAt,
+		Name:        product.Name,
+		Description: product.Description,
+		Price:       product.Price,
 	}
 	res := &priceMonitorpb.ProductResponse{
 		Product: &productpb,
@@ -164,11 +173,13 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 		result := Product{}
 		err := cur.Decode(&result)
 		productpb := &priceMonitorpb.Product{
-			Id:        result.ID.Hex(),
-			Url:       result.Url,
-			Images:    result.Images,
-			CreatedAt: result.CreatedAt,
-			Name:      result.Name,
+			Id:          result.ID.Hex(),
+			Url:         result.Url,
+			Images:      result.Images,
+			CreatedAt:   result.CreatedAt,
+			Name:        result.Name,
+			Description: result.Description,
+			Price:       result.Price,
 		}
 		productpbs = append(productpbs, productpb)
 		if err != nil {
@@ -301,6 +312,8 @@ func getProduct(url string) crawlerpb.ProductInfo {
 			product.Image, _ = s.Attr("content")
 		} else if name, _ := s.Attr("property"); name == "product:price:amount" {
 			product.Price, _ = s.Attr("content")
+		} else if name, _ := s.Attr("property"); name == "og:description" {
+			product.Description, _ = s.Attr("content")
 		}
 	})
 

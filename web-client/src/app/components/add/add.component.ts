@@ -16,10 +16,17 @@ export class AddComponent {
 
   add() {
     this.loading = true;
-    this.grpcClient.addProduct(this.url).then(res => {
+    if (this.url.startsWith("https://fabelio.com/")) {
+      this.grpcClient.addProduct(this.url).then(res => {
+        this.loading = false;
+        this.router.navigateByUrl('/all');
+      })
+    } else {
+      alert("The provided url not a fabelio product")
       this.loading = false;
-      this.router.navigateByUrl('/all');
-    })
+      this.url = ""
+    }
+
   }
 
 }
