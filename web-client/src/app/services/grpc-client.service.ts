@@ -14,7 +14,7 @@ import { PriceMonitorServiceClient } from '../proto/priceMonitorpb/priceMonitor_
 export class GRPCClient {
   client: PriceMonitorServiceClient;
   constructor() {
-    this.client = new PriceMonitorServiceClient('http://localhost:8000');
+    this.client = new PriceMonitorServiceClient('http://ec2-18-219-84-250.us-east-2.compute.amazonaws.com:8080');
   }
 
   addProduct(url) {
