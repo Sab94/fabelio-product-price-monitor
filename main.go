@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -49,19 +50,30 @@ type server struct{}
 // AddProduct crawls the provided url, gets product info, stores product info, starts cron to fetch price hourly
 func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductRequest) (*priceMonitorpb.AddProductResponse, error) {
 	url := req.GetUrl()
-	// Step 1: Fetch from website
-	productRaw := crawlerClient.Crawl(url)
 
+	res := &priceMonitorpb.AddProductResponse{
+		Product: nil,
+	}
+
+	// Step 1: Fetch from website
+	productRaw, err := crawlerClient.Crawl(url)
+	if err != nil {
+		log.Println(err)
+		return res, err
+	}
 	// Step 2: Start a cron to ferch updates every hour
 	collection := database.DB.Collection("products")
-	cronEntryID, err := c.AddFunc("@every 2m", func() {
+	cronEntryID, err := c.AddFunc("@hourly", func() {
 		product := Product{}
 		err := collection.FindOne(context.Background(), bson.M{"url": url}).Decode(&product)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		p := getProduct(url)
+		p, err := getProduct(url)
+		if err != nil {
+			log.Fatal(err)
+		}
 		pt := PriceTime{
 			Price: p.GetPrice(),
 			Time:  time.Now().String(),
@@ -82,7 +94,8 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return res, err
 	}
 	// Step 3: Store into db
 	product := Product{
@@ -103,7 +116,8 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 
 	_, err = collection.InsertOne(ctx, product)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return res, err
 	}
 
 	history := make([]*priceMonitorpb.PriceTime, len(product.History))
@@ -120,7 +134,7 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 		Description: product.Description,
 		Price:       product.Price,
 	}
-	res := &priceMonitorpb.AddProductResponse{
+	res = &priceMonitorpb.AddProductResponse{
 		Product: &productpb,
 	}
 	return res, nil
@@ -129,13 +143,18 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 // GetProduct fetches product info of the provided product_id
 func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductRequest) (*priceMonitorpb.ProductResponse, error) {
 	productID, _ := primitive.ObjectIDFromHex(req.GetId())
-	fmt.Println(productID)
+
+	res := &priceMonitorpb.ProductResponse{
+		Product: nil,
+	}
+
 	// Step 1: Fetch from db
 	collection := database.DB.Collection("products")
 	product := Product{}
 	err := collection.FindOne(context.Background(), bson.M{"_id": productID}).Decode(&product)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return res, err
 	}
 
 	// Step 2: Fetch into website (current price)
@@ -155,7 +174,7 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 		Description: product.Description,
 		Price:       product.Price,
 	}
-	res := &priceMonitorpb.ProductResponse{
+	res = &priceMonitorpb.ProductResponse{
 		Product: &productpb,
 	}
 	return res, nil
@@ -163,7 +182,9 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 
 // GetProducts fetches all added products
 func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsRequest) (*priceMonitorpb.ProductsResponse, error) {
-
+	res := &priceMonitorpb.ProductsResponse{
+		Products: nil,
+	}
 	// Step 1: Fetch from db
 	_context := context.Background()
 	collection := database.DB.Collection("products")
@@ -171,7 +192,8 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 	cur, err := collection.Find(_context, bson.D{}, nil)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return res, err
 	}
 	defer cur.Close(_context)
 
@@ -190,11 +212,12 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 		}
 		productpbs = append(productpbs, productpb)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			return res, err
 		}
 	}
 
-	res := &priceMonitorpb.ProductsResponse{
+	res = &priceMonitorpb.ProductsResponse{
 		Products: productpbs,
 	}
 	return res, nil
@@ -204,7 +227,11 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 func (*server) Crawl(ctx context.Context, req *crawlerpb.ProductUrl) (*crawlerpb.ProductInfo, error) {
 	url := req.GetUrl()
 
-	product := getProduct(url)
+	product, err := getProduct(url)
+
+	if err != nil {
+		return nil, err
+	}
 
 	res := &product
 
@@ -291,7 +318,7 @@ func allowCors(w http.ResponseWriter, req *http.Request) {
 }
 
 // Read meta tags for product info
-func getProduct(url string) crawlerpb.ProductInfo {
+func getProduct(url string) (crawlerpb.ProductInfo, error) {
 	doc, err := goquery.NewDocument(url)
 	if err != nil {
 		log.Fatal(err)
@@ -309,5 +336,9 @@ func getProduct(url string) crawlerpb.ProductInfo {
 		}
 	})
 
-	return product
+	if product.GetPrice() == "" {
+		return product, errors.New("Not a product url")
+	}
+
+	return product, nil
 }

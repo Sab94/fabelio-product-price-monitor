@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func Crawl(url string) *crawlerpb.ProductInfo {
+func Crawl(url string) (*crawlerpb.ProductInfo, error) {
 	cc, err := grpc.Dial("localhost:50052", grpc.WithInsecure())
 
 	if err != nil {
@@ -25,8 +25,9 @@ func Crawl(url string) *crawlerpb.ProductInfo {
 	res, err := c.Crawl(context.Background(), req)
 
 	if err != nil {
-		log.Fatalf("error while calling watcher %v", err)
+		// log.Fatalf("error while calling %v", err)
+		return res, err
 	}
 
-	return res
+	return res, nil
 }

@@ -23,13 +23,16 @@ func main() {
 	c := priceMonitorpb.NewPriceMonitorServiceClient(cc)
 
 	req := &priceMonitorpb.AddProductRequest{
-		Url: "https://fabelio.com/ip/tirai-kuro.html",
+		Url: "https://fabelio.com/ip/dabi-sofa-bed.html",
 	}
 
 	res, err := c.AddProduct(context.Background(), req)
 
 	if err != nil {
-		log.Fatalf("error while calling watcher %v", err)
+		// log.Fatalf("error while calling %v", err)
 	}
-	log.Println(res)
+	if res.GetProduct().GetPrice() == "" {
+		log.Println("blank string")
+	}
+	log.Println(res.GetProduct().GetPrice())
 }
