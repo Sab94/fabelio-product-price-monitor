@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+// Product is DB model for products
 type Product struct {
 	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Url         string             `json:"url" bson:"url"`
@@ -36,19 +37,22 @@ type Product struct {
 	Price       string             `json:"price" bson:"price"`
 }
 
+// PriceTime is hourly history object in Product
 type PriceTime struct {
 	Price string `json:"price" bson:"price"`
 	Time  string `json:"time" bson:"time"`
 }
 
+// grpc server
 type server struct{}
 
+// AddProduct crawls the provided url, gets product info, stores product info, starts cron to fetch price hourly
 func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductRequest) (*priceMonitorpb.AddProductResponse, error) {
 	url := req.GetUrl()
 	// Step 1: Fetch from website
 	productRaw := crawlerClient.Crawl(url)
 
-	// Step 2: Start a goroutine to ferch updates every hour
+	// Step 2: Start a cron to ferch updates every hour
 	collection := database.DB.Collection("products")
 	cronEntryID, err := c.AddFunc("@every 2m", func() {
 		product := Product{}
@@ -63,6 +67,8 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 			Time:  time.Now().String(),
 		}
 		product.History = append(product.History, pt)
+
+		// Update product
 		_, err = collection.UpdateOne(context.Background(), bson.M{"_id": product.ID}, bson.D{
 			{"$set", bson.D{
 				{"history", product.History},
@@ -107,7 +113,6 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 	}
 
 	productpb := priceMonitorpb.Product{
-		Id:          "aaa",
 		Url:         product.Url,
 		History:     history,
 		Images:      product.Images,
@@ -121,6 +126,7 @@ func (*server) AddProduct(ctx context.Context, req *priceMonitorpb.AddProductReq
 	return res, nil
 }
 
+// GetProduct fetches product info of the provided product_id
 func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductRequest) (*priceMonitorpb.ProductResponse, error) {
 	productID, _ := primitive.ObjectIDFromHex(req.GetId())
 	fmt.Println(productID)
@@ -155,6 +161,7 @@ func (*server) GetProduct(ctx context.Context, req *priceMonitorpb.GetProductReq
 	return res, nil
 }
 
+// GetProducts fetches all added products
 func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsRequest) (*priceMonitorpb.ProductsResponse, error) {
 
 	// Step 1: Fetch from db
@@ -193,6 +200,7 @@ func (*server) GetProducts(ctx context.Context, req *priceMonitorpb.GetProductsR
 	return res, nil
 }
 
+// Crawl starts first crawling process
 func (*server) Crawl(ctx context.Context, req *crawlerpb.ProductUrl) (*crawlerpb.ProductInfo, error) {
 	url := req.GetUrl()
 
@@ -203,9 +211,11 @@ func (*server) Crawl(ctx context.Context, req *crawlerpb.ProductUrl) (*crawlerpb
 	return res, nil
 }
 
+// global cron variable
 var c = cron.New()
 
 func main() {
+	// load .env
 	err := godotenv.Load()
 
 	if err != nil {
@@ -213,10 +223,18 @@ func main() {
 	} else {
 		fmt.Println("env loaded")
 	}
+
+	// connect to database
 	database.Connect()
+
+	// start cron
 	c.Start()
+
+	// grpc server initialization
 	priceMonitorServer := grpc.NewServer()
 	crawlerServer := grpc.NewServer()
+
+	// Register service server
 	priceMonitorpb.RegisterPriceMonitorServiceServer(priceMonitorServer, &server{})
 	crawlerpb.RegisterCrawlerServiceServer(crawlerServer, &server{})
 
@@ -242,18 +260,18 @@ func main() {
 		}
 	}()
 
-	// grpc Web
+	// exposed grpc Web for priceMonitorServer
 	wrappedServer := grpcweb.WrapServer(priceMonitorServer)
 	handler := func(resp http.ResponseWriter, req *http.Request) {
 		allowCors(resp, req)
 		wrappedServer.ServeHTTP(resp, req)
 	}
 	httpServer := http.Server{
-		Addr:    ":8000",
+		Addr:    ":8080",
 		Handler: http.HandlerFunc(handler),
 	}
 	go func() {
-		fmt.Println("http server running on port 8000")
+		fmt.Println("http server running on port 8080")
 		if err := httpServer.ListenAndServe(); err != nil {
 			grpclog.Fatalf("failed starting http server: %v", err)
 		}
@@ -264,6 +282,7 @@ func main() {
 	<-sig
 }
 
+// Allowed cors for grpc web
 func allowCors(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
@@ -271,34 +290,7 @@ func allowCors(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, XMLHttpRequest, x-user-agent, x-grpc-web, grpc-status, grpc-message")
 }
 
-func parseMap(aMap map[string]interface{}) {
-	for key, val := range aMap {
-		switch concreteVal := val.(type) {
-		case map[string]interface{}:
-			parseMap(val.(map[string]interface{}))
-		case []interface{}:
-			parseArray(val.([]interface{}))
-		default:
-			if key == "price" {
-				fmt.Println(key, ":", concreteVal)
-			}
-		}
-	}
-}
-
-func parseArray(anArray []interface{}) {
-	for _, val := range anArray {
-		switch concreteVal := val.(type) {
-		case map[string]interface{}:
-			parseMap(val.(map[string]interface{}))
-		case []interface{}:
-			parseArray(val.([]interface{}))
-		default:
-			_ = concreteVal
-		}
-	}
-}
-
+// Read meta tags for product info
 func getProduct(url string) crawlerpb.ProductInfo {
 	doc, err := goquery.NewDocument(url)
 	if err != nil {
